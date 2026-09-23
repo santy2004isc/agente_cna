@@ -7,6 +7,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Activa la extensión pgvector en PostgreSQL
         VectorExtension(),
     ]
