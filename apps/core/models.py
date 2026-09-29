@@ -1,234 +1,238 @@
 import uuid
 from django.db import models
-from django.conf import settings
-from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from pgvector.django import VectorField
 
 
-# ==========================================
-# 1. MÓDULO DE AUTENTICACIÓN Y USUARIOS
-# ==========================================
-
-class UserManager(BaseUserManager):
-    """Manager personalizado para usar el email como credencial principal."""
-    def create_user(self, email, password=None, **extra_fields):
-        if not email:
-            raise ValueError('El correo electrónico es obligatorio')
-        email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+# -----------------------------------------------------------------------------
+# 1. USUARIOS Y AUTENTICACIÓN
+# -----------------------------------------------------------------------------
+class AdministradorUsuarios(BaseUserManager):
+    def create_user(self, correo_electronico, password=None, **extra_fields):
+        if not correo_electronico:
+            raise ValueError('El correo electrónico es obligatorio.')
+        correo_electronico = self.normalize_email(correo_electronico)
+        user = self.model(correo_electronico=correo_electronico, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', UserRole.ADMIN)
-        return self.create_user(email, password, **extra_fields)
+    def create_superuser(self, correo_electronico, password=None, **extra_fields):
+        extra_fields.setdefault('rol', 'administrador')
+        extra_fields.setdefault('es_staff', True)
+        extra_fields.setdefault('es_superuser', True)
+        return self.create_user(correo_electronico, password, **extra_fields)
 
 
-class UserRole(models.TextChoices):
-    ADMIN = 'ADMIN', 'Administrador'
-    GESTOR = 'GESTOR', 'Gestor de la Base de Conocimiento'
-    REGISTRADO = 'REGISTRADO', 'Usuario Registrado'
+class Usuario(AbstractBaseUser, PermissionsMixin):
+    ROLES = (
+        ('administrador', 'Administrador'),
+        ('gestor_conocimiento', 'Gestor de la Base de Conocimiento'),
+        ('usuario_registrado', 'Usuario Registrado'),
+    )
 
+    id_identificador = models.CharField(
+        max_length=30, 
+        unique=True, 
+        verbose_name='ID Identificador'
+    )
+    correo_electronico = models.EmailField(
+        max_length=254, 
+        unique=True, 
+        verbose_name='Correo Electrónico'
+    )
+    nombre = models.CharField(max_length=100, verbose_name='Nombre')
+    apellidos = models.CharField(max_length=100, verbose_name='Apellidos')
+    rol = models.CharField(
+        max_length=30, 
+        choices=ROLES, 
+        default='usuario_registrado', 
+        verbose_name='Rol'
+    )
+    es_activo = models.BooleanField(default=True, verbose_name='Está Activo')
+    es_staff = models.BooleanField(default=False, verbose_name='Acceso al Admin')
+    fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Registro')
+    ultima_conexion = models.DateTimeField(null=True, blank=True, verbose_name='Última Conexión')
 
-class User(AbstractUser):
-    username = None  # Se elimina el nombre de usuario por defecto
-    email = models.EmailField('Correo Electrónico', unique=True)
-    custom_id = models.CharField('ID Personalizado', max_length=30, unique=True, editable=False)
-    role = models.CharField('Rol', max_length=20, choices=UserRole.choices, default=UserRole.REGISTRADO)
-    daily_message_limit = models.IntegerField('Límite de Mensajes Diarios', default=50)
+    objects = AdministradorUsuarios()
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name', 'last_name']
-
-    objects = UserManager()
-
-    def save(self, *args, **kwargs):
-        if not self.custom_id:
-            prefix_map = {
-                UserRole.ADMIN: 'ADM',
-                UserRole.GESTOR: 'GST',
-                UserRole.REGISTRADO: 'USR',
-            }
-            prefix = prefix_map.get(self.role, 'USR')
-            total_users_same_role = User.objects.filter(role=self.role).count() + 1
-            self.custom_id = f"{prefix}-2026-{total_users_same_role:05d}"
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.custom_id} - {self.email}"
-
-
-class GuestSession(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session_key = models.CharField(max_length=40, unique=True, db_index=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Invitado {self.session_key[:8]}"
-
-
-class UserUsageQuota(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='usage_quotas')
-    guest_session = models.ForeignKey(GuestSession, on_delete=models.CASCADE, null=True, blank=True, related_name='usage_quotas')
-    date = models.DateField(db_index=True)
-    messages_sent = models.IntegerField(default=0)
-    max_limit = models.IntegerField(default=50)
+    USERNAME_FIELD = 'correo_electronico'
+    REQUIRED_FIELDS = ['nombre', 'apellidos']
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['user', 'date'], name='unique_user_daily_quota'),
-            models.UniqueConstraint(fields=['guest_session', 'date'], name='unique_guest_daily_quota'),
-        ]
+        db_table = 'usuarios'
+        verbose_name = 'Usuario'
+        verbose_name_plural = 'Usuarios'
 
     def __str__(self):
-        entity = self.user.email if self.user else str(self.guest_session)
-        return f"{entity} [{self.date}]: {self.messages_sent}/{self.max_limit}"
+        return f"{self.id_identificador} - {self.correo_electronico}"
 
 
-# ==========================================
-# 2. MÓDULO DE LEYES Y VECTORES (RAG)
-# ==========================================
-
-class LawStatus(models.TextChoices):
-    PENDING = 'PENDING', 'Pendiente'
-    EXTRACTING = 'EXTRACTING', 'Extrayendo Texto'
-    INDEXED = 'INDEXED', 'Indexado / Vectorizado'
-    FAILED = 'FAILED', 'Error en Procesamiento'
-
-
-class FederalLaw(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    official_title = models.CharField('Título Oficial de la Ley', max_length=500, db_index=True)
-    short_title = models.CharField('Siglas / Nombre Corto', max_length=100, null=True, blank=True)
-    dof_publication_date = models.DateField('Fecha Publicación DOF', null=True, blank=True)
-    dof_last_reform_date = models.DateField('Última Reforma DOF', null=True, blank=True)
-    pdf_file = models.FileField('Archivo PDF', upload_to='laws_pdf/')
-    
-    # Nivel 1 Anti-Duplicidad: Hash SHA-256 del archivo
-    file_hash = models.CharField('Hash SHA-256 PDF', max_length=64, unique=True, db_index=True)
-    
-    status = models.CharField('Estado', max_length=20, choices=LawStatus.choices, default=LawStatus.PENDING)
-    is_active = models.BooleanField('Vigente en RAG', default=True)
-    uploaded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name='uploaded_laws'
+# -----------------------------------------------------------------------------
+# 2. DOCUMENTOS Y EMBEDDINGS (RAG)
+# -----------------------------------------------------------------------------
+class DocumentoLegal(models.Model):
+    ESTADOS = (
+        ('pendiente', 'Pendiente'),
+        ('procesando', 'Procesando'),
+        ('completado', 'Completado'),
+        ('error', 'Error de Procesamiento'),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        estado = "Vigente" if self.is_active else "Derogada/Histórica"
-        return f"{self.official_title} ({estado})"
-
-
-class SectionType(models.TextChoices):
-    TITULO = 'TITULO', 'Título'
-    CAPITULO = 'CAPITULO', 'Capítulo'
-    ARTICULO = 'ARTICULO', 'Artículo'
-    TRANSITORIO = 'TRANSITORIO', 'Transitorio'
-
-
-class LawSection(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    law = models.ForeignKey(FederalLaw, on_delete=models.CASCADE, related_name='sections')
-    section_type = models.CharField('Tipo', max_length=20, choices=SectionType.choices)
-    article_number = models.CharField('Número de Artículo', max_length=50, null=True, blank=True, db_index=True)
-    title = models.CharField('Título de la Sección', max_length=255)
-    raw_content = models.TextField('Texto Íntegro')
-    order = models.IntegerField('Orden Cronológico', db_index=True)
+    titulo = models.CharField(max_length=255, verbose_name='Título de la Ley')
+    nombre_archivo_original = models.CharField(max_length=255, verbose_name='Nombre Archivo Original')
+    archivo_pdf = models.FileField(upload_to='leyes_pdf/', verbose_name='Archivo PDF')
+    es_ley_federal_valida = models.BooleanField(default=True, verbose_name='Es Ley Federal Válida')
+    estado_procesamiento = models.CharField(
+        max_length=30, 
+        choices=ESTADOS, 
+        default='pendiente', 
+        verbose_name='Estado'
+    )
+    total_fragmentos = models.IntegerField(default=0, verbose_name='Total de Fragmentos')
+    cargado_por = models.ForeignKey(
+        Usuario, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='documentos_cargados',
+        verbose_name='Cargado por'
+    )
+    fecha_carga = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Carga')
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name='Fecha de Actualización')
 
     class Meta:
-        ordering = ['order']
+        db_table = 'documentos_legales'
+        verbose_name = 'Documento Legal'
+        verbose_name_plural = 'Documentos Legales'
 
     def __str__(self):
-        return f"{self.law.short_title or self.law.official_title[:20]} - {self.title}"
+        return self.titulo
 
 
-class LawChunk(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    law = models.ForeignKey(FederalLaw, on_delete=models.CASCADE, related_name='chunks')
-    section = models.ForeignKey(LawSection, on_delete=models.CASCADE, related_name='chunks')
-    article_reference = models.CharField('Referencia para Prompt', max_length=150)
-    content = models.TextField('Texto del Fragmento')
-    
-    # Nivel 2 Anti-Duplicidad: Hash del texto del fragmento
-    chunk_hash = models.CharField('Hash SHA-256 Fragmento', max_length=64, unique=True, db_index=True)
-    
-    # Vector de 1024 dimensiones (para modelos como BAAI/bge-m3)
-    embedding = VectorField(dimensions=1024)
-    metadata = models.JSONField('Metadatos Adicionales', default=dict)
-
-    def __str__(self):
-        return f"Chunk {self.article_reference} [{str(self.id)[:8]}]"
-
-
-# ==========================================
-# 3. MÓDULO DE ASISTENTE CONVERSACIONAL Y CITAS
-# ==========================================
-
-class ChatRole(models.TextChoices):
-    USER = 'USER', 'Usuario'
-    ASSISTANT = 'ASSISTANT', 'Asistente IA'
-    SYSTEM = 'SYSTEM', 'Sistema'
-
-
-class ChatSession(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='chat_sessions'
+class FragmentoDocumento(models.Model):
+    documento = models.ForeignKey(
+        DocumentoLegal, 
+        on_delete=models.CASCADE, 
+        related_name='fragmentos',
+        verbose_name='Documento Legal'
     )
-    guest_session = models.ForeignKey(
-        GuestSession,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='chat_sessions'
+    indice_fragmento = models.IntegerField(verbose_name='Índice del Fragmento')
+    contenido_texto = models.TextField(verbose_name='Contenido del Texto')
+    numero_articulo = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True, 
+        verbose_name='Número de Artículo'
     )
-    title = models.CharField('Título de la Conversación', max_length=255, default='Nueva Consulta Legal')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Chat: {self.title} ({self.created_at.strftime('%Y-%m-%d')})"
-
-
-class ChatMessage(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name='messages')
-    role = models.CharField('Emisor', max_length=10, choices=ChatRole.choices)
-    content = models.TextField('Mensaje')
-    
-    # Guardrail: Bloqueo de consultas fuera del marco legal mexicano
-    is_out_of_scope = models.BooleanField('Fuera de Ámbito (Guardrail)', default=False)
-    
-    llm_provider = models.CharField('Proveedor LLM', max_length=20, null=True, blank=True)
-    llm_model = models.CharField('Modelo LLM', max_length=50, null=True, blank=True)
-    tokens_used = models.IntegerField('Tokens Consumidos', null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    numero_pagina = models.IntegerField(null=True, blank=True, verbose_name='Número de Página')
+    vector_embedding = VectorField(dimensions=1536, verbose_name='Vector Embedding')
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Creación')
 
     class Meta:
-        ordering = ['created_at']
+        db_table = 'fragmentos_documentos'
+        verbose_name = 'Fragmento de Documento'
+        verbose_name_plural = 'Fragmentos de Documentos'
 
     def __str__(self):
-        return f"[{self.role}] {self.content[:30]}..."
+        return f"{self.documento.titulo} - Frag #{self.indice_fragmento}"
 
 
-class MessageCitation(models.Model):
+# -----------------------------------------------------------------------------
+# 3. CONVERSACIONES Y HISTORIAL
+# -----------------------------------------------------------------------------
+class Conversacion(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='citations')
-    chunk = models.ForeignKey(LawChunk, on_delete=models.PROTECT, related_name='citations')
-    law_title = models.CharField('Título de Ley Citada', max_length=500)
-    article_reference = models.CharField('Artículo Citado', max_length=150)
-    relevance_score = models.FloatField('Similitud Semántica')
+    usuario = models.ForeignKey(
+        Usuario, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='conversaciones',
+        verbose_name='Usuario'
+    )
+    identificador_invitado = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True, 
+        verbose_name='ID de Invitado'
+    )
+    titulo = models.CharField(max_length=255, default='Nueva consulta', verbose_name='Título')
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Creación')
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name='Fecha de Actualización')
+
+    class Meta:
+        db_table = 'conversaciones'
+        verbose_name = 'Conversación'
+        verbose_name_plural = 'Conversaciones'
 
     def __str__(self):
-        return f"Cita {self.article_reference} -> Msg {str(self.message.id)[:8]}"
+        return f"{self.titulo} - {self.id}"
+
+
+class Mensaje(models.Model):
+    EMISORES = (
+        ('usuario', 'Usuario'),
+        ('asistente', 'Asistente IA'),
+        ('sistema', 'Sistema'),
+    )
+
+    conversacion = models.ForeignKey(
+        Conversacion, 
+        on_delete=models.CASCADE, 
+        related_name='mensajes',
+        verbose_name='Conversación'
+    )
+    emisor = models.CharField(max_length=20, choices=EMISORES, verbose_name='Emisor')
+    contenido_texto = models.TextField(verbose_name='Contenido del Mensaje')
+    citas_legales = models.JSONField(default=list, blank=True, verbose_name='Citas Legales')
+    fue_rechazado_por_guardrail = models.BooleanField(
+        default=False, 
+        verbose_name='Rechazado por Guardrail'
+    )
+    tiempo_respuesta_ms = models.IntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='Tiempo de Respuesta (ms)'
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Emisión')
+
+    class Meta:
+        db_table = 'mensajes'
+        verbose_name = 'Mensaje'
+        verbose_name_plural = 'Mensajes'
+
+    def __str__(self):
+        return f"[{self.emisor}] {self.contenido_texto[:30]}..."
+
+
+# -----------------------------------------------------------------------------
+# 4. CUOTAS Y CONTROL DE LÍMITES
+# -----------------------------------------------------------------------------
+class CuotaUsuario(models.Model):
+    usuario = models.OneToOneField(
+        Usuario, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='cuota',
+        verbose_name='Usuario'
+    )
+    identificador_invitado = models.CharField(
+        max_length=100, 
+        unique=True, 
+        null=True, 
+        blank=True, 
+        verbose_name='ID Invitado'
+    )
+    limite_diario_mensajes = models.IntegerField(default=10, verbose_name='Límite Diario')
+    mensajes_consumidos_hoy = models.IntegerField(default=0, verbose_name='Mensajes Consumidos Hoy')
+    fecha_ultimo_reinicio = models.DateField(auto_now=True, verbose_name='Último Reinicio')
+
+    class Meta:
+        db_table = 'cuotas_usuarios'
+        verbose_name = 'Cuota de Usuario'
+        verbose_name_plural = 'Cuotas de Usuarios'
+
+    def __str__(self):
+        return f"Cuota: {self.mensajes_consumidos_hoy}/{self.limite_diario_mensajes}"
