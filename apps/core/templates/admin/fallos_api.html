@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditoría de APIs - ACCN{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-50 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
+        <h1 class="font-bold text-slate-800 text-lg">ACCN - Registros de Fallos de API y Conmutación</h1>
+        <a href="{% url 'admin_dashboard' %}" class="text-sm font-medium text-blue-600 hover:underline">Volver al Dashboard</a>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <span class="text-sm font-semibold text-slate-600">Total de Eventos: {{ total_fallos }}</span>
+            </div>
+            <table class="w-full text-left text-sm text-slate-600">
+                <thead class="bg-slate-50 text-slate-700 uppercase text-xs border-b border-slate-200">
+                    <tr>
+                        <th class="px-6 py-3">Fecha</th>
+                        <th class="px-6 py-3">Usuario</th>
+                        <th class="px-6 py-3">Proveedor Solicitado</th>
+                        <th class="px-6 py-3">Código Error</th>
+                        <th class="px-6 py-3">Conmutado A</th>
+                        <th class="px-6 py-3">¿Resultado Exitoso?</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for f in fallos %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-6 py-4">{{ f.fecha_evento|date:"Y-m-d H:i:s" }}</td>
+                        <td class="px-6 py-4 font-medium">{{ f.usuario.correo_electronico|default:"Anónimo" }}</td>
+                        <td class="px-6 py-4 font-bold text-slate-800">{{ f.proveedor_solicitado }}</td>
+                        <td class="px-6 py-4 text-xs font-mono text-red-600 bg-red-50 rounded px-2 py-1 inline-block">{{ f.codigo_error }}</td>
+                        <td class="px-6 py-4 font-semibold text-blue-600">{{ f.conmutado_a|default:"N/A" }}</td>
+                        <td class="px-6 py-4">
+                            {% if f.exitoso %}
+                            <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-semibold">Exitoso</span>
+                            {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold">Fallido</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-slate-400">No se registran eventos de conmutación o fallos de API.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Panel Admin - ACCN{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-50 flex flex-col">
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
+        <div class="flex items-center space-x-3">
+            <h1 class="font-bold text-slate-800 text-lg">Agente Conversacional para Consulta Normativa</h1>
+        </div>
+        <div class="flex items-center space-x-6">
+            <a href="{% url 'admin_dashboard' %}" class="text-sm font-semibold text-blue-600 border-b-2 border-blue-600 pb-1">Usuarios</a>
+            <a href="{% url 'admin_fallos_api' %}" class="text-sm font-medium text-slate-600 hover:text-blue-600">Auditoría APIs</a>
+            <a href="{% url 'admin_perfil' %}" class="text-sm font-medium text-slate-600 hover:text-blue-600">Mi Perfil</a>
+            <a href="{% url 'logout' %}" class="text-sm font-medium text-red-600 hover:text-red-700">Cerrar Sesión</a>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold text-slate-800">Gestión de Cuentas</h2>
+            <a href="{% url 'admin_crear_usuario' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg shadow transition">
+                + Crear Usuario
+            </a>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <table class="w-full text-left text-sm text-slate-600">
+                <thead class="bg-slate-50 text-slate-700 uppercase text-xs border-b border-slate-200">
+                    <tr>
+                        <th class="px-6 py-3">Nombre</th>
+                        <th class="px-6 py-3">Correo</th>
+                        <th class="px-6 py-3">Rol</th>
+                        <th class="px-6 py-3">Estado</th>
+                        <th class="px-6 py-3 text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for u in usuarios %}
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-6 py-4 font-semibold text-slate-900">{{ u.nombre }} {{ u.apellido }}</td>
+                        <td class="px-6 py-4">{{ u.correo_electronico }}</td>
+                        <td class="px-6 py-4"><span class="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded-full font-medium">{{ u.get_rol_display }}</span></td>
+                        <td class="px-6 py-4">
+                            {% if u.activo %}
+                            <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-semibold">Activo</span>
+                            {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-right space-x-3">
+                            <a href="{% url 'admin_editar_usuario' u.id %}" class="text-blue-600 hover:underline text-xs font-medium">Editar</a>
+                            <a href="{% url 'admin_cambiar_estado' u.id %}" class="text-slate-600 hover:underline text-xs font-medium">{% if u.activo %}Desactivar{% else %}Activar{% endif %}</a>
+                            <a href="{% url 'admin_eliminar_usuario' u.id %}" onclick="return confirm('¿Eliminar esta cuenta permanentemente?')" class="text-red-600 hover:underline text-xs font-medium">Eliminar</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-slate-400">No hay otras cuentas registradas en el sistema.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+{% endblock %}

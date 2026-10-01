@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro - ACCN{% endblock %}
+
+{% block content %}
+<div class="flex-1 flex items-center justify-center p-6">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-8">
+        
+        <div class="text-center mb-6">
+            <h1 class="text-xl font-bold text-slate-900">Crear Cuenta</h1>
+            <p class="text-sm text-slate-500 mt-1">Regístrate para acceder al agente conversacional</p>
+        </div>
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            
+            <div>
+                <label for="{{ form.nombre.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">Nombre(s)</label>
+                {{ form.nombre }}
+                {% if form.nombre.errors %}<p class="text-red-500 text-xs mt-1">{{ form.nombre.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.apellido.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">Apellidos</label>
+                {{ form.apellido }}
+                {% if form.apellido.errors %}<p class="text-red-500 text-xs mt-1">{{ form.apellido.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.correo_electronico.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
+                {{ form.correo_electronico }}
+                {% if form.correo_electronico.errors %}<p class="text-red-500 text-xs mt-1">{{ form.correo_electronico.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                <div class="relative">
+                    {{ form.password }}
+                    <button type="button" onclick="togglePasswordVisibility('input_password_reg', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none">
+                        <svg class="icon-eye w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg class="icon-eye-off w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.02 10.02 0 012.122-.063c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-2.015 3.558m-3.003 3.003L3 3l18 18"/></svg>
+                    </button>
+                </div>
+                {% if form.password.errors %}<p class="text-red-500 text-xs mt-1">{{ form.password.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.password_confirmacion.id_for_label }}" class="block text-sm font-medium text-slate-700 mb-1">Confirmar Contraseña</label>
+                <div class="relative">
+                    {{ form.password_confirmacion }}
+                    <button type="button" onclick="togglePasswordVisibility('input_password_confirm', this)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none">
+                        <svg class="icon-eye w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        <svg class="icon-eye-off w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.02 10.02 0 012.122-.063c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-2.015 3.558m-3.003 3.003L3 3l18 18"/></svg>
+                    </button>
+                </div>
+                {% if form.password_confirmacion.errors %}<p class="text-red-500 text-xs mt-1">{{ form.password_confirmacion.errors.0 }}</p>{% endif %}
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 mt-2">
+                Registrarse
+            </button>
+        </form>
+
+        <div class="mt-6 text-center text-sm text-slate-600 border-t border-slate-100 pt-4">
+            ¿Ya tienes una cuenta? 
+            <a href="{% url 'login' %}" class="text-blue-600 hover:underline font-medium">Inicia sesión</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
