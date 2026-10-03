@@ -1,11 +1,12 @@
 from functools import wraps
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Q
 
 from ...models import Usuario, LeyFederal, FragmentoNormativo
-from ...forms.gestor_forms import CargarDocumentoForm, EditarPerfilGestorForm
+from ...forms.gestor_forms import CargarDocumentoForm, EditarPerfilGestorForm, EditarLeyFederalForm
 from ...services.pdf_processor import (
     procesar_pdf_en_memoria,
     generar_vector_embedding,
@@ -30,15 +31,24 @@ def gestor_required(view_func):
 @gestor_required
 def gestor_dashboard_view(request):
     """
-    Dashboard del Gestor: Listado de LeyFederal y total de FragmentoNormativo.
+    Dashboard del Gestor con buscador por Nombre o Siglas.
     """
-    leyes = LeyFederal.objects.filter(usuario=request.user).order_by('-fecha_creacion')
+    query = request.GET.get('q', '').strip()
+    leyes = LeyFederal.objects.filter(usuario=request.user)
+
+    if query:
+        leyes = leyes.filter(
+            Q(nombre__icontains=query) | Q(siglas__icontains=query)
+        )
+
+    leyes = leyes.order_by('-fecha_creacion')
     total_fragmentos = FragmentoNormativo.objects.filter(ley__usuario=request.user).count()
 
     context = {
         'leyes': leyes,
-        'total_leyes': leyes.count(),
+        'total_leyes': LeyFederal.objects.filter(usuario=request.user).count(),
         'total_fragmentos': total_fragmentos,
+        'query': query,
     }
     return render(request, 'gestor/dashboard.html', context)
 
@@ -47,7 +57,7 @@ def gestor_dashboard_view(request):
 @gestor_required
 def cargar_documento_view(request):
     """
-    Carga e ingesta de PDF -> LeyFederal y FragmentoNormativo (RF-2.1, RF-2.2, RF-2.3).
+    Carga e ingesta de PDF -> LeyFederal y FragmentoNormativo.
     """
     if request.method == 'POST':
         form = CargarDocumentoForm(request.POST, request.FILES)
@@ -55,22 +65,18 @@ def cargar_documento_view(request):
             archivo_pdf = request.FILES['archivo_pdf']
             
             try:
-                # 1. Procesar PDF en memoria
                 hash_doc, chunks = procesar_pdf_en_memoria(archivo_pdf)
 
-                # 2. Validación de duplicados por Hash SHA-256
                 if LeyFederal.objects.filter(hash_documento=hash_doc).exists():
                     messages.error(request, "Este documento PDF ya ha sido procesado e ingresado previamente al sistema.")
                     return render(request, 'gestor/cargar_documento.html', {'form': form})
 
                 with transaction.atomic():
-                    # 3. Guardar registro principal en LeyFederal
                     ley = form.save(commit=False)
                     ley.usuario = request.user
                     ley.hash_documento = hash_doc
                     ley.save()
 
-                    # 4. Generar vectores y guardar en FragmentoNormativo
                     fragmentos_objetos = []
                     for chunk in chunks:
                         hash_frag = calcular_hash_fragmento(chunk)
@@ -96,6 +102,66 @@ def cargar_documento_view(request):
         form = CargarDocumentoForm()
 
     return render(request, 'gestor/cargar_documento.html', {'form': form})
+
+
+@login_required
+@gestor_required
+def editar_ley_view(request, ley_id):
+    """
+    Permite actualizar metadatos y re-procesar los fragmentos vectoriales de una ley.
+    """
+    ley = get_object_or_404(LeyFederal, id=ley_id, usuario=request.user)
+    
+    if request.method == 'POST':
+        form = EditarLeyFederalForm(request.POST, request.FILES, instance=ley)
+        if form.is_valid():
+            archivo_pdf = request.FILES.get('archivo_pdf')
+            
+            try:
+                with transaction.atomic():
+                    ley_actualizada = form.save(commit=False)
+                    
+                    # Si se adjuntó un nuevo PDF, se reemplazan los fragmentos y vectores
+                    if archivo_pdf:
+                        hash_doc, chunks = procesar_pdf_en_memoria(archivo_pdf)
+
+                        # Validar duplicados exceptuando la ley actual
+                        if LeyFederal.objects.filter(hash_documento=hash_doc).exclude(id=ley.id).exists():
+                            messages.error(request, "El archivo PDF proporcionado ya está cargado en otra ley registrada.")
+                            return render(request, 'gestor/editar_ley.html', {'form': form, 'ley': ley})
+
+                        ley_actualizada.hash_documento = hash_doc
+                        ley_actualizada.save()
+
+                        # Eliminar vectores/fragmentos anteriores e insertar los nuevos
+                        FragmentoNormativo.objects.filter(ley=ley).delete()
+
+                        fragmentos_objetos = []
+                        for chunk in chunks:
+                            hash_frag = calcular_hash_fragmento(chunk)
+                            vector = generar_vector_embedding(chunk)
+                            fragmentos_objetos.append(
+                                FragmentoNormativo(
+                                    ley=ley,
+                                    contenido_fragmento=chunk,
+                                    vector_embedding=vector,
+                                    hash_fragmento=hash_frag
+                                )
+                            )
+                        FragmentoNormativo.objects.bulk_create(fragmentos_objetos)
+                        messages.success(request, f"La ley '{ley.nombre}' y sus fragmentos vectoriales ({len(chunks)}) fueron actualizados con éxito.")
+                    else:
+                        ley_actualizada.save()
+                        messages.success(request, f"Los datos de la ley '{ley.nombre}' fueron actualizados correctamente.")
+
+                return redirect('gestor_dashboard')
+
+            except Exception as e:
+                messages.error(request, f"Ocurrió un error al actualizar la ley: {str(e)}")
+    else:
+        form = EditarLeyFederalForm(instance=ley)
+
+    return render(request, 'gestor/editar_ley.html', {'form': form, 'ley': ley})
 
 
 @login_required

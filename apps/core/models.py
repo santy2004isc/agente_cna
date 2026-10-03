@@ -126,7 +126,7 @@ class LeyFederal(models.Model):
         verbose_name='Siglas/Abreviatura'
     )
     fecha_publicacion = models.DateField(verbose_name='Fecha de publicación')
-    fecha_ultima_reforma = models.DateField(verbose_name='Fecha de última reforma')
+    fecha_ultima_reforma = models.DateField(null=True, blank=True, verbose_name='Fecha de última reforma')
     version_actual = models.IntegerField(
         default=1, 
         verbose_name='Versión actual'

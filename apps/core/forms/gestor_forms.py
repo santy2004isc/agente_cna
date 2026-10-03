@@ -12,12 +12,21 @@ SOLO_LETRAS_VALIDATOR = RegexValidator(
 
 class CargarDocumentoForm(forms.ModelForm):
     """
-    Formulario para carga temporal y metadatos de LeyFederal (RF-2.1).
+    Formulario para carga de nuevas Leyes (fecha_ultima_reforma opcional).
     """
     archivo_pdf = forms.FileField(
         label="Archivo Ley Federal (PDF)",
         widget=forms.FileInput(attrs={'class': INPUT_STYLE, 'accept': '.pdf'}),
         help_text="Seleccione un archivo en formato .pdf legible."
+    )
+    fecha_publicacion = forms.DateField(
+        label="Fecha de Publicación",
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'class': INPUT_STYLE, 'type': 'date'})
+    )
+    fecha_ultima_reforma = forms.DateField(
+        required=False,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'class': INPUT_STYLE, 'type': 'date'}),
+        label="Fecha de Última Reforma (Opcional)"
     )
 
     class Meta:
@@ -26,8 +35,6 @@ class CargarDocumentoForm(forms.ModelForm):
         widgets = {
             'nombre': forms.TextInput(attrs={'class': INPUT_STYLE, 'placeholder': 'Ej. Ley Federal del Trabajo'}),
             'siglas': forms.TextInput(attrs={'class': INPUT_STYLE, 'placeholder': 'Ej. LFT'}),
-            'fecha_publicacion': forms.DateInput(attrs={'class': INPUT_STYLE, 'type': 'date'}),
-            'fecha_ultima_reforma': forms.DateInput(attrs={'class': INPUT_STYLE, 'type': 'date'}),
             'estado': forms.Select(attrs={'class': INPUT_STYLE}),
         }
 
@@ -41,9 +48,59 @@ class CargarDocumentoForm(forms.ModelForm):
         return archivo
 
 
+class EditarLeyFederalForm(forms.ModelForm):
+    """
+    Formulario para actualizar metadatos y opcionalmente re-vectorizar la Ley Federal.
+    """
+    archivo_pdf = forms.FileField(
+        label="Nuevo Archivo PDF (Opcional)",
+        required=False,
+        widget=forms.FileInput(attrs={'class': INPUT_STYLE, 'accept': '.pdf', 'id': 'input_archivo_pdf'}),
+        help_text="Cargue un nuevo PDF únicamente si desea actualizar y re-vectorizar el contenido normativo."
+    )
+    # format='%Y-%m-%d' corrige el problema de visualización en <input type="date">
+    fecha_ultima_reforma = forms.DateField(
+        required=False,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'class': INPUT_STYLE, 'type': 'date', 'id': 'input_fecha_reforma'}),
+        label="Fecha de Última Reforma"
+    )
+
+    class Meta:
+        model = LeyFederal
+        fields = ['nombre', 'siglas', 'fecha_ultima_reforma', 'estado']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': INPUT_STYLE}),
+            'siglas': forms.TextInput(attrs={'class': INPUT_STYLE}),
+            'estado': forms.Select(attrs={'class': INPUT_STYLE}),
+        }
+
+    def clean_archivo_pdf(self):
+        archivo = self.cleaned_data.get('archivo_pdf')
+        if archivo:
+            if not archivo.name.endswith('.pdf'):
+                raise ValidationError("El archivo seleccionado debe ser obligatoriamente en formato .pdf")
+            if archivo.size > 50 * 1024 * 1024:
+                raise ValidationError("El tamaño del archivo PDF no puede exceder los 50MB.")
+        return archivo
+
+    def clean(self):
+        cleaned_data = super().clean()
+        archivo_pdf = cleaned_data.get('archivo_pdf')
+        fecha_reforma = cleaned_data.get('fecha_ultima_reforma')
+
+        # Validación condicional: Obligatorio si hay archivo seleccionado
+        if archivo_pdf and not fecha_reforma:
+            self.add_error(
+                'fecha_ultima_reforma', 
+                'Si adjunta un nuevo archivo PDF para actualizar la ley, la Fecha de Última Reforma es obligatoria.'
+            )
+
+        return cleaned_data
+
+
 class EditarPerfilGestorForm(forms.ModelForm):
     """
-    Formulario unificado de perfil para el Gestor.
+    Formulario de perfil para el Gestor.
     """
     nombre = forms.CharField(label="Nombre(s)", validators=[SOLO_LETRAS_VALIDATOR], widget=forms.TextInput(attrs={'class': INPUT_STYLE}))
     apellido = forms.CharField(label="Apellidos", validators=[SOLO_LETRAS_VALIDATOR], widget=forms.TextInput(attrs={'class': INPUT_STYLE}))

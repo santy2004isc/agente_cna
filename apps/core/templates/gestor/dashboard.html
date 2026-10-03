@@ -12,7 +12,6 @@
         </div>
         <div class="flex items-center space-x-6">
             <a href="{% url 'gestor_dashboard' %}" class="text-sm font-semibold text-blue-600 border-b-2 border-blue-600 pb-1">Leyes Registradas</a>
-            <a href="#" class="text-sm font-medium text-slate-600 hover:text-blue-600">Ir al Chat</a>
             <a href="{% url 'gestor_perfil' %}" class="text-sm font-medium text-slate-600 hover:text-blue-600">Mi Perfil</a>
             <a href="{% url 'logout' %}" class="text-sm font-medium text-red-600 hover:text-red-700">Cerrar Sesión</a>
         </div>
@@ -38,15 +37,29 @@
             </div>
         </div>
 
-        <!-- Encabezado Tabla -->
-        <div class="flex items-center justify-between pt-2">
+        <!-- Encabezado con Buscador -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2">
             <h2 class="text-xl font-bold text-slate-800">Leyes Federales en la Base de Datos</h2>
-            <a href="{% url 'gestor_cargar_documento' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg shadow transition">
-                + Cargar Nueva Ley (.PDF)
-            </a>
+            
+            <div class="flex items-center space-x-3">
+                <!-- Buscador de Leyes -->
+                <form method="get" action="{% url 'gestor_dashboard' %}" class="relative flex-1 sm:w-80">
+                    <input type="text" name="q" value="{{ query }}" placeholder="Buscar por nombre o siglas..." class="w-full pl-9 pr-4 py-2 bg-white text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none shadow-sm">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    {% if query %}
+                    <a href="{% url 'gestor_dashboard' %}" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold">✕</a>
+                    {% endif %}
+                </form>
+
+                <a href="{% url 'gestor_cargar_documento' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow transition whitespace-nowrap">
+                    + Cargar Nueva Ley
+                </a>
+            </div>
         </div>
 
-        <!-- Tabla de Documentos con Columna Fecha de Carga -->
+        <!-- Tabla de Documentos -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <table class="w-full text-left text-sm text-slate-600">
                 <thead class="bg-slate-50 text-slate-700 uppercase text-xs border-b border-slate-200">
@@ -57,6 +70,7 @@
                         <th class="px-6 py-3">Última Reforma</th>
                         <th class="px-6 py-3">Fecha de Carga</th>
                         <th class="px-6 py-3">Estado</th>
+                        <th class="px-6 py-3 text-right">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -65,7 +79,13 @@
                         <td class="px-6 py-4 font-semibold text-slate-900">{{ ley.nombre }}</td>
                         <td class="px-6 py-4"><span class="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded font-mono">{{ ley.siglas|default:"N/A" }}</span></td>
                         <td class="px-6 py-4">{{ ley.fecha_publicacion|date:"d/m/Y" }}</td>
-                        <td class="px-6 py-4">{{ ley.fecha_ultima_reforma|date:"d/m/Y" }}</td>
+                        <td class="px-6 py-4">
+                            {% if ley.fecha_ultima_reforma %}
+                                {{ ley.fecha_ultima_reforma|date:"d/m/Y" }}
+                            {% else %}
+                                <span class="text-slate-400 italic text-xs">Sin reforma</span>
+                            {% endif %}
+                        </td>
                         <td class="px-6 py-4 text-xs text-slate-500 font-medium">{{ ley.fecha_creacion|date:"d/m/Y H:i" }}</td>
                         <td class="px-6 py-4">
                             {% if ley.estado == 'VIGENTE' %}
@@ -74,10 +94,21 @@
                             <span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold">Abrogada</span>
                             {% endif %}
                         </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="{% url 'gestor_editar_ley' ley.id %}" class="text-blue-600 hover:text-blue-800 text-xs font-semibold hover:underline">
+                                Editar
+                            </a>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-8 text-center text-slate-400">Aún no has registrado ninguna norma legal. Presiona "+ Cargar Nueva Ley" para comenzar.</td>
+                        <td colspan="7" class="px-6 py-8 text-center text-slate-400">
+                            {% if query %}
+                            No se encontraron leyes que coincidan con la búsqueda "{{ query }}".
+                            {% else %}
+                            Aún no has registrado ninguna norma legal. Presiona "+ Cargar Nueva Ley" para comenzar.
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
