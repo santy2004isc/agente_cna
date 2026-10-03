@@ -113,7 +113,7 @@ class RegistroForm(forms.ModelForm):
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data["password"])
-        user.rol = Usuario.Rol.REGISTRADO[cite: 1, 2]
+        user.rol = Usuario.Rol.REGISTRADO
         if commit:
             user.save()
         return user

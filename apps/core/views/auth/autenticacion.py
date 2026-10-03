@@ -8,7 +8,7 @@ def login_view(request):
     Vista de Inicio de Sesión.
     """
     if request.user.is_authenticated:
-        return redirect('chat')
+        return redirect('router')
 
     if request.method == 'POST':
         form = LoginForm(request.POST)
@@ -38,15 +38,14 @@ def registro_view(request):
     Vista de Registro Público.
     """
     if request.user.is_authenticated:
-        return redirect('chat')
+        return redirect('router')
 
     if request.method == 'POST':
         form = RegistroForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            auth_login(request, user)
+            form.save()
             messages.success(request, "Cuenta registrada exitosamente.")
-            return redirect('chat')
+            return redirect('login')
     else:
         form = RegistroForm()
 

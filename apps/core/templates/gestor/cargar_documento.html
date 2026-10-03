@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}Cargar Ley Federal - ACCN{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+    <div class="w-full max-w-xl bg-white rounded-xl shadow-lg border border-slate-200 p-8">
+        <h1 class="text-xl font-bold text-slate-900 mb-2">Ingesta de Ley Federal en PDF</h1>
+        <p class="text-xs text-slate-500 mb-6">El archivo se procesará en memoria y sus vectores se registrarán. El documento PDF no será almacenado en disco.</p>
+
+        <form id="formCargarDocumento" method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.nombre.label }}</label>
+                {{ form.nombre }}
+                {% if form.nombre.errors %}<p class="text-red-500 text-xs mt-1">{{ form.nombre.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.siglas.label }}</label>
+                    {{ form.siglas }}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.estado.label }}</label>
+                    {{ form.estado }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.fecha_publicacion.label }}</label>
+                    {{ form.fecha_publicacion }}
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.fecha_ultima_reforma.label }}</label>
+                    {{ form.fecha_ultima_reforma }}
+                </div>
+            </div>
+
+            <hr class="my-4 border-slate-200">
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.archivo_pdf.label }}</label>
+                {{ form.archivo_pdf }}
+                <p class="text-xs text-slate-400 mt-1">{{ form.archivo_pdf.help_text }}</p>
+                {% if form.archivo_pdf.errors %}<p class="text-red-500 text-xs mt-1">{{ form.archivo_pdf.errors.0 }}</p>{% endif %}
+            </div>
+
+            {% if form.non_field_errors %}
+            <p class="text-red-500 text-xs mt-1">{{ form.non_field_errors.0 }}</p>
+            {% endif %}
+
+            <!-- Alerta Informativa sobre el Tiempo de Procesamiento -->
+            <div id="alertaCarga" class="hidden bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-lg p-3 flex items-start space-x-2">
+                <svg class="w-4 h-4 text-blue-600 mt-0.5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span><strong>Procesando documento:</strong> Generando fragmentos y vectores con el modelo local. Por favor espere sin cerrar ni refrescar esta pantalla...</span>
+            </div>
+
+            <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                <a id="btnCancelar" href="{% url 'gestor_dashboard' %}" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</a>
+                <button type="submit" id="btnSubmit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm shadow inline-flex items-center transition duration-150">
+                    <span id="btnSubmitText">Procesar y Vectorizar</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.getElementById('formCargarDocumento').addEventListener('submit', function(e) {
+        const btnSubmit = document.getElementById('btnSubmit');
+        const btnSubmitText = document.getElementById('btnSubmitText');
+        const btnCancelar = document.getElementById('btnCancelar');
+        const alertaCarga = document.getElementById('alertaCarga');
+
+        // Deshabilitar botón para evitar múltiples envíos
+        btnSubmit.disabled = true;
+        btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
+        
+        // Deshabilitar botón de cancelar
+        btnCancelar.classList.add('pointer-events-none', 'opacity-50');
+
+        // Cambiar texto e insertar ícono de Spinner
+        btnSubmitText.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Procesando y Vectorizando...
+        `;
+
+        // Mostrar alerta visual
+        alertaCarga.classList.remove('hidden');
+    });
+</script>
+{% endblock %}

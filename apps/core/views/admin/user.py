@@ -38,7 +38,7 @@ def crear_usuario_view(request):
         form = CrearUsuarioAdminForm(request.POST)
         if form.is_valid():
             usuario = form.save()
-            messages.success(request, f"Usuario {usuario.correo_electronico} creado exitosamente.")
+            messages.success(request, f"Usuario creado exitosamente.")
             return redirect('admin_dashboard')
     else:
         form = CrearUsuarioAdminForm()
@@ -58,7 +58,7 @@ def editar_usuario_view(request, user_id):
         form = EditarUsuarioAdminForm(request.POST, instance=usuario)
         if form.is_valid():
             form.save()
-            messages.success(request, f"Usuario {usuario.correo_electronico} actualizado correctamente.")
+            messages.success(request, f"{usuario.nombre} actualizado correctamente.")
             return redirect('admin_dashboard')
     else:
         form = EditarUsuarioAdminForm(instance=usuario)

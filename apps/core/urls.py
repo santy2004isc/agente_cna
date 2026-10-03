@@ -1,6 +1,7 @@
 from django.urls import path
 from .views.auth import autenticacion, router
 from .views.admin import api_log, profile, user
+from .views.gestor import gestor_views
 
 urlpatterns = [
     path('', router.home_router_view, name='router'),
@@ -16,5 +17,10 @@ urlpatterns = [
     path('admin-panel/usuarios/<int:user_id>/eliminar/', user.eliminar_usuario_view, name='admin_eliminar_usuario'),
     path('admin-panel/perfil/', profile.perfil_admin_view, name='admin_perfil'),
     path('admin-panel/fallos-api/', api_log.registros_fallos_api_view, name='admin_fallos_api'),
+
+    # Gestor
+    path('gestor-panel/', gestor_views.gestor_dashboard_view, name='gestor_dashboard'),
+    path('gestor-panel/documentos/cargar/', gestor_views.cargar_documento_view, name='gestor_cargar_documento'),
+    path('gestor-panel/perfil/', gestor_views.perfil_gestor_view, name='gestor_perfil'),
 
 ]
