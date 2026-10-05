@@ -13,4 +13,4 @@ def home_router_view(request):
     elif request.user.rol == Usuario.Rol.GESTOR:
         return redirect('gestor_dashboard')
     else:
-        return render(request, 'chat.html')
+        return redirect('chat_interfaz')

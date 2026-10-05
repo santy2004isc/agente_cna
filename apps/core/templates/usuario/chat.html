@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+
+{% block title %}Asistente Jurídico - ACCN{% endblock %}
+
+{% block content %}
+<div class="h-screen flex bg-slate-100 overflow-hidden">
+    
+    <!-- Sidebar -->
+    <aside class="w-72 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 flex-shrink-0">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-blue-600 text-white font-bold flex items-center justify-center rounded-lg text-xs shadow">ACCN</div>
+                <span class="font-bold text-white text-sm">Agente Legal</span>
+            </div>
+            <form method="post" action="{% url 'chat_nueva_conversacion' %}">
+                {% csrf_token %}
+                <button type="submit" title="Nueva Consulta" class="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+            </form>
+        </div>
+
+        <!-- Indicador de Cuota -->
+        <div class="px-4 py-2 bg-slate-950/60 border-b border-slate-800 flex items-center justify-between text-[11px]">
+            <span class="text-slate-400">Cuota diaria:</span>
+            <span id="badgeCuota" class="font-semibold text-blue-400">{{ mensajes_restantes }} / {{ request.user.cuota_diaria_mensajes }} disponibles</span>
+        </div>
+
+        <!-- Historial -->
+        <div class="flex-1 overflow-y-auto p-3 space-y-1">
+            <p class="text-xs font-semibold text-slate-500 uppercase px-2 mb-2">Consultas Registradas</p>
+
+            {% for c in conversaciones %}
+            <div class="group flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition {% if conversacion_actual and conversacion_actual.id == c.id %}bg-blue-600 text-white{% else %}hover:bg-slate-800 text-slate-400 hover:text-slate-200{% endif %}">
+                <a href="{% url 'chat_conversacion' c.id %}" class="flex-1 truncate mr-2">
+                    {{ c.titulo }}
+                </a>
+                <form method="post" action="{% url 'chat_eliminar_conversacion' c.id %}" class="opacity-0 group-hover:opacity-100 transition">
+                    {% csrf_token %}
+                    <button type="submit" onclick="return confirm('¿Eliminar esta conversación?');" class="text-slate-400 hover:text-red-400 p-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </form>
+            </div>
+            {% empty %}
+            <p class="text-xs text-slate-500 text-center py-4">Sin historial.</p>
+            {% endfor %}
+        </div>
+
+        <!-- Footer Usuario -->
+        <div class="p-3 border-t border-slate-800 flex items-center justify-between bg-slate-950/50">
+            <a href="{% url 'usuario_perfil' %}" class="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white truncate">
+                <div class="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-200 text-xs">
+                    {{ request.user.nombre|slice:":1" }}
+                </div>
+                <span class="truncate">{{ request.user.nombre }} {{ request.user.apellido }}</span>
+            </a>
+            <a href="{% url 'logout' %}" title="Cerrar Sesión" class="text-slate-500 hover:text-red-400 p-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Chat -->
+    <main class="flex-1 flex flex-col bg-white">
+        <header class="border-b border-slate-200 px-6 py-3.5 flex items-center justify-between bg-white shadow-sm">
+            <div>
+                <h2 class="font-bold text-slate-800 text-sm" id="chatTitle">
+                    {% if conversacion_actual %}{{ conversacion_actual.titulo }}{% else %}Consulta Normativa{% endif %}
+                </h2>
+                <p class="text-xs text-slate-400">Sistema RAG de Leyes Federales</p>
+            </div>
+        </header>
+
+        <!-- Mensajes -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+            {% if mensajes %}
+                {% for msg in mensajes %}
+                    {% if msg.emisor == 'USUARIO' %}
+                    <div class="flex justify-end">
+                        <div class="max-w-xl bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-3 text-sm shadow-sm">
+                            <p class="whitespace-pre-wrap">{{ msg.contenido_texto }}</p>
+                            <span class="block text-right text-[10px] text-blue-200 mt-1">{{ msg.fecha_envio|date:"H:i" }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="flex justify-start">
+                        <div class="max-w-2xl bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 text-sm text-slate-800 shadow-sm space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 text-xs">
+                                <span class="text-blue-600 font-semibold flex items-center space-x-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    <span>Respuesta Legal</span>
+                                </span>
+                                {% if msg.proveedor_ia %}
+                                <span class="text-[10px] text-slate-400">IA: {{ msg.proveedor_ia }}{% if msg.conmutado_fallback %} (Fallback){% endif %}</span>
+                                {% endif %}
+                            </div>
+
+                            <p class="whitespace-pre-wrap leading-relaxed">{{ msg.contenido_texto }}</p>
+
+                            {% if msg.citas %}
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1.5 mt-2">
+                                <span class="font-bold text-slate-700 block uppercase tracking-wider text-[10px]">Citas Normativas:</span>
+                                <ul class="space-y-1 list-disc list-inside text-slate-600">
+                                    {% for c in msg.citas %}
+                                    <li><strong>{{ c.ley }}</strong> ({{ c.siglas }}) - Última Reforma: {{ c.fecha_reforma }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            <span class="block text-right text-[10px] text-slate-400 mt-1">{{ msg.fecha_envio|date:"H:i" }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+            <div id="emptyState" class="h-full flex flex-col items-center justify-center text-center p-6">
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-3 font-bold text-xl">
+                    ⚖️
+                </div>
+                <h3 class="font-bold text-slate-800 text-base">Asistente de Leyes Federales</h3>
+                <p class="text-xs text-slate-500 max-w-sm mt-1">Escriba su duda jurídica. El sistema buscará en los fragmentos normativos para dar su respuesta con citas fundamentadas.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Indicador -->
+        <div id="thinkingIndicator" class="hidden px-6 py-2 bg-slate-50 border-t border-slate-100 flex items-center space-x-2 text-xs text-slate-500">
+            <svg class="w-4 h-4 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span>Buscando en la base de datos de leyes...</span>
+        </div>
+
+        <!-- Formulario Chat -->
+        <footer class="p-4 border-t border-slate-200 bg-white">
+            <form id="chatForm" class="flex items-center space-x-3">
+                <input type="hidden" id="conversacionId" value="{{ conversacion_actual.id|default:'' }}">
+                <input type="text" id="chatInput" placeholder="Escriba su pregunta legal aquí..." class="flex-1 px-4 py-3 bg-slate-100 text-slate-800 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition">
+                <button type="submit" id="btnEnviar" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-3 rounded-xl text-sm shadow transition">
+                    Enviar
+                </button>
+            </form>
+        </footer>
+    </main>
+</div>
+
+<script>
+    const chatContainer = document.getElementById('chatContainer');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+    const conversacionIdInput = document.getElementById('conversacionId');
+    const thinkingIndicator = document.getElementById('thinkingIndicator');
+    const emptyState = document.getElementById('emptyState');
+    const badgeCuota = document.getElementById('badgeCuota');
+
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    scrollToBottom();
+
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const mensaje = chatInput.value.trim();
+        if (!mensaje) return;
+
+        if (emptyState) emptyState.remove();
+
+        // 1. Render usuario
+        const userMsgHtml = `
+            <div class="flex justify-end">
+                <div class="max-w-xl bg-blue-600 text-white rounded-2xl rounded-tr-none px-4 py-3 text-sm shadow-sm">
+                    <p class="whitespace-pre-wrap">${escapeHtml(mensaje)}</p>
+                    <span class="block text-right text-[10px] text-blue-200 mt-1">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+            </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+        chatInput.value = '';
+        scrollToBottom();
+
+        thinkingIndicator.classList.remove('hidden');
+
+        try {
+            const response = await fetch("{% url 'chat_api_enviar' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    mensaje: mensaje,
+                    conversacion_id: conversacionIdInput.value || null
+                })
+            });
+
+            const data = await response.json();
+            thinkingIndicator.classList.add('hidden');
+
+            if (response.ok && data.ok) {
+                if (!conversacionIdInput.value) {
+                    conversacionIdInput.value = data.conversacion_id;
+                    document.getElementById('chatTitle').innerText = data.conversacion_titulo;
+                }
+
+                // Actualizar cuota badge
+                if (badgeCuota) {
+                    badgeCuota.innerText = `${data.mensajes_restantes} / {{ request.user.cuota_diaria_mensajes }} disponibles`;
+                }
+
+                // Citas
+                let citasHtml = '';
+                if (data.respuesta.citas && data.respuesta.citas.length > 0) {
+                    citasHtml = `
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1.5 mt-2">
+                            <span class="font-bold text-slate-700 block uppercase tracking-wider text-[10px]">Citas Normativas:</span>
+                            <ul class="space-y-1 list-disc list-inside text-slate-600">
+                                ${data.respuesta.citas.map(c => `<li><strong>${escapeHtml(c.ley)}</strong> (${escapeHtml(c.siglas)}) - Última Reforma: ${escapeHtml(c.fecha_reforma)}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                // Render respuesta
+                const systemMsgHtml = `
+                    <div class="flex justify-start">
+                        <div class="max-w-2xl bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 text-sm text-slate-800 shadow-sm space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 text-xs">
+                                <span class="text-blue-600 font-semibold flex items-center space-x-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    <span>Respuesta Legal</span>
+                                </span>
+                                <span class="text-[10px] text-slate-400">IA: ${data.respuesta.proveedor}${data.respuesta.conmutado ? ' (Fallback)' : ''}</span>
+                            </div>
+                            <p class="whitespace-pre-wrap leading-relaxed">${escapeHtml(data.respuesta.contenido)}</p>
+                            ${citasHtml}
+                            <span class="block text-right text-[10px] text-slate-400 mt-1">${data.respuesta.fecha}</span>
+                        </div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', systemMsgHtml);
+                scrollToBottom();
+
+            } else {
+                alert(data.error || 'No se pudo procesar la consulta.');
+            }
+
+        } catch (error) {
+            thinkingIndicator.classList.add('hidden');
+            alert('Error de conexión con el servidor.');
+        }
+    });
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
+    }
+</script>
+{% endblock %}
