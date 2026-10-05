@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat Normativo - Gestor{% endblock %}
+
+{% block content %}
+<div class="flex h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-72 bg-slate-950 border-r border-slate-800 flex flex-col justify-between">
+        <div class="p-4 flex flex-col space-y-4">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-400 bg-amber-950/80 px-2.5 py-1 rounded-full border border-amber-800/50">
+                    Gestor
+                </span>
+                <span class="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Consultas Ilimitadas</span>
+            </div>
+
+            <!-- Botón Nueva Conversación -->
+            <form action="{% url 'gestor_crear_conversacion' %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm py-2 px-4 rounded-lg shadow-md transition flex items-center justify-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Nueva Consulta</span>
+                </button>
+            </form>
+
+            <!-- Historial -->
+            <div class="mt-4 flex-1 overflow-y-auto space-y-1 max-h-[calc(100vh-220px)] pr-1">
+                {% for conv in conversaciones %}
+                    <div class="group flex items-center justify-between p-2.5 rounded-lg text-sm transition {% if conversacion_actual and conversacion_actual.id == conv.id %}bg-slate-800 text-white font-medium border-l-4 border-amber-500{% else %}text-slate-400 hover:bg-slate-900 hover:text-slate-200{% endif %}">
+                        <a href="{% url 'gestor_chat_conversacion' conv.id %}" class="truncate flex-1">
+                            {{ conv.titulo }}
+                        </a>
+                        <form action="{% url 'gestor_eliminar_conversacion' conv.id %}" method="POST" class="opacity-0 group-hover:opacity-100 transition">
+                            {% csrf_token %}
+                            <button type="submit" onclick="return confirm('¿Eliminar esta conversación?')" class="text-slate-500 hover:text-red-400 p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </form>
+                    </div>
+                {% empty %}
+                    <p class="text-xs text-slate-500 text-center py-4">Sin conversaciones recientes.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Footer Sidebar -->
+        <div class="p-3 border-t border-slate-800 bg-slate-950 flex flex-col space-y-2">
+            <a href="{% url 'gestor_dashboard' %}" class="w-full bg-slate-800 hover:bg-slate-700 text-blue-300 text-xs font-medium text-center py-2 rounded-lg border border-slate-700 transition flex items-center justify-center space-x-1">
+                <span>📚 Ir a Gestión de Leyes</span>
+            </a>
+            <div class="flex items-center justify-between pt-1">
+                <span class="text-xs text-slate-400 truncate">{{ request.user.nombre }} {{ request.user.apellido }}</span>
+                <a href="{% url 'logout' %}" class="text-xs text-red-400 hover:underline">Salir</a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 flex flex-col bg-slate-900 justify-between">
+        
+        <header class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80 backdrop-blur">
+            <div>
+                <h1 class="text-base font-semibold text-white">Consulta Normativa General</h1>
+                <p class="text-xs text-slate-400">Consultas generadas a partir del contexto de Leyes Federales Vigentes.</p>
+            </div>
+        </header>
+
+        <!-- Contenedor de Mensajes -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-4">
+            {% for msg in mensajes %}
+                {% if msg.emisor == 'USUARIO' %}
+                    <div class="flex justify-end">
+                        <div class="max-w-xl bg-blue-600 text-white p-3.5 rounded-2xl rounded-tr-none text-sm shadow">
+                            <p class="whitespace-pre-wrap">{{ msg.contenido_texto }}</p>
+                            <span class="block text-[10px] text-blue-200 text-right mt-1">{{ msg.fecha_envio|date:"H:i" }}</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="flex justify-start">
+                        <div class="max-w-2xl bg-slate-800 border border-slate-700 text-slate-200 p-4 rounded-2xl rounded-tl-none text-sm space-y-2 shadow">
+                            <p class="whitespace-pre-wrap">{{ msg.contenido_texto }}</p>
+                            
+                            {% if msg.citas %}
+                                <div class="mt-2 pt-2 border-t border-slate-700/60 text-xs text-amber-300/90 space-y-1">
+                                    <span class="font-semibold block text-[11px] text-amber-400">Leyes Consultadas:</span>
+                                    {% for cita in msg.citas %}
+                                        <div class="bg-slate-900/50 p-1.5 rounded border border-slate-700/40">
+                                            📜 {{ cita.ley }} {% if cita.siglas %}({{ cita.siglas }}){% endif %} - Reforma: {{ cita.fecha_reforma }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+
+                            <div class="flex items-center justify-between pt-1 text-[10px] text-slate-400 border-t border-slate-700/40">
+                                <span>Proveedor: <strong class="text-slate-300">{{ msg.get_proveedor_ia_display|default:msg.proveedor_ia }}</strong></span>
+                                {% if msg.conmutado_fallback %}
+                                    <span class="text-amber-400 font-semibold">⚡ Fallback Activo</span>
+                                {% endif %}
+                                <span>{{ msg.fecha_envio|date:"H:i" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% empty %}
+                <div class="text-center py-20 text-slate-500">
+                    <p class="text-sm">Realiza una pregunta sobre las leyes vigentes para iniciar.</p>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Formulario -->
+        <footer class="p-4 border-t border-slate-800 bg-slate-950">
+            <form id="chatForm" class="flex space-x-3">
+                <input type="hidden" id="conversacionId" value="{{ conversacion_actual.id|default:'' }}">
+                <textarea id="mensajeInput" rows="1" placeholder="Escribe tu consulta sobre legislación vigente..." class="flex-1 bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"></textarea>
+                <button type="submit" id="btnEnviar" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-5 py-3 rounded-xl transition flex items-center justify-center">
+                    Enviar
+                </button>
+            </form>
+        </footer>
+
+    </main>
+</div>
+
+<script>
+    const chatForm = document.getElementById('chatForm');
+    const mensajeInput = document.getElementById('mensajeInput');
+    const chatContainer = document.getElementById('chatContainer');
+    const conversacionIdInput = document.getElementById('conversacionId');
+
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const mensaje = mensajeInput.value.trim();
+        if (!mensaje) return;
+
+        const conversacion_id = conversacionIdInput.value;
+
+        renderizarMensajeUsuario(mensaje);
+        mensajeInput.value = '';
+
+        try {
+            const response = await fetch("{% url 'gestor_enviar_mensaje_api' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    mensaje: mensaje,
+                    conversacion_id: conversacion_id
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.error || 'Ocurrió un error al procesar la solicitud.');
+                return;
+            }
+
+            if (!conversacion_id && data.conversacion_id) {
+                conversacionIdInput.value = data.conversacion_id;
+            }
+
+            renderizarRespuestaSistema(data.respuesta);
+        } catch (err) {
+            alert('Error de conexión con el servidor.');
+        }
+    });
+
+    function renderizarMensajeUsuario(texto) {
+        const div = document.createElement('div');
+        div.className = 'flex justify-end';
+        div.innerHTML = `
+            <div class="max-w-xl bg-blue-600 text-white p-3.5 rounded-2xl rounded-tr-none text-sm shadow">
+                <p class="whitespace-pre-wrap">${texto}</p>
+                <span class="block text-[10px] text-blue-200 text-right mt-1">Ahora</span>
+            </div>
+        `;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function renderizarRespuestaSistema(resp) {
+        const div = document.createElement('div');
+        div.className = 'flex justify-start';
+
+        let citasHtml = '';
+        if (resp.citas && resp.citas.length > 0) {
+            citasHtml = `<div class="mt-2 pt-2 border-t border-slate-700/60 text-xs text-amber-300/90 space-y-1">
+                <span class="font-semibold block text-[11px] text-amber-400">Leyes Consultadas:</span>
+                ${resp.citas.map(c => `<div class="bg-slate-900/50 p-1.5 rounded border border-slate-700/40">📜 ${c.ley} ${c.siglas ? '('+c.siglas+')' : ''} - Reforma: ${c.fecha_reforma}</div>`).join('')}
+            </div>`;
+        }
+
+        div.innerHTML = `
+            <div class="max-w-2xl bg-slate-800 border border-slate-700 text-slate-200 p-4 rounded-2xl rounded-tl-none text-sm space-y-2 shadow">
+                <p class="whitespace-pre-wrap">${resp.contenido}</p>
+                ${citasHtml}
+                <div class="flex items-center justify-between pt-1 text-[10px] text-slate-400 border-t border-slate-700/40">
+                    <span>Proveedor: <strong class="text-slate-300">${resp.proveedor}</strong></span>
+                    ${resp.conmutado ? '<span class="text-amber-400 font-semibold">⚡ Fallback Activo</span>' : ''}
+                    <span>${resp.fecha}</span>
+                </div>
+            </div>
+        `;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+</script>
+{% endblock %}

@@ -7,17 +7,13 @@ from django.db import transaction
 from django.contrib import messages
 
 from ...models import Usuario, Conversacion, Mensaje
-from ...forms.usuario_forms import EditarPerfilUsuarioForm
 from ...decorators import roles_requeridos
 from ...services.chat_service import buscar_contexto_normativo, generar_respuesta_ia_con_fallback
 
 
 @login_required
-@roles_requeridos(Usuario.Rol.REGISTRADO)
-def chat_interfaz_view(request, conversacion_id=None):
-    """
-    Interfaz de chat optimizada para Usuario Registrado.
-    """
+@roles_requeridos(Usuario.Rol.GESTOR, Usuario.Rol.ADMINISTRADOR)
+def chat_gestor_interfaz_view(request, conversacion_id=None):
     usuario = request.user
     conversaciones = Conversacion.objects.filter(usuario=usuario).order_by('-fecha_creacion')
     
@@ -32,52 +28,41 @@ def chat_interfaz_view(request, conversacion_id=None):
     if conversacion_actual:
         mensajes = conversacion_actual.mensajes.all().order_by('fecha_envio')
 
-    mensajes_restantes = max(0, usuario.cuota_diaria_mensajes - usuario.mensajes_usados_hoy)
-
     context = {
         'conversaciones': conversaciones,
         'conversacion_actual': conversacion_actual,
         'mensajes': mensajes,
-        'mensajes_restantes': mensajes_restantes,
+        'mensajes_restantes': "Ilimitado"
     }
-    return render(request, 'usuario/chat.html', context)
+    return render(request, 'gestor/chat.html', context)
 
 
 @login_required
-@roles_requeridos(Usuario.Rol.REGISTRADO)
+@roles_requeridos(Usuario.Rol.GESTOR, Usuario.Rol.ADMINISTRADOR)
 @require_POST
-def crear_nueva_conversacion_view(request):
+def crear_nueva_conversacion_gestor_view(request):
     nueva_conv = Conversacion.objects.create(
         usuario=request.user,
-        titulo="Consulta Normativa"
+        titulo="Consulta Normativa (Gestor)"
     )
-    return redirect('usuario_chat_conversacion', conversacion_id=nueva_conv.id)
+    return redirect('gestor_chat_conversacion', conversacion_id=nueva_conv.id)
 
 
 @login_required
-@roles_requeridos(Usuario.Rol.REGISTRADO)
+@roles_requeridos(Usuario.Rol.GESTOR, Usuario.Rol.ADMINISTRADOR)
 @require_POST
-def eliminar_conversacion_view(request, conversacion_id):
+def eliminar_conversacion_gestor_view(request, conversacion_id):
     conv = get_object_or_404(Conversacion, id=conversacion_id, usuario=request.user)
     conv.delete()
     messages.success(request, "La conversación fue eliminada.")
-    return redirect('usuario_chat_interfaz')
+    return redirect('gestor_chat_interfaz')
 
 
 @login_required
-@roles_requeridos(Usuario.Rol.REGISTRADO)
+@roles_requeridos(Usuario.Rol.GESTOR, Usuario.Rol.ADMINISTRADOR)
 @require_POST
-def enviar_mensaje_api_view(request):
-    """
-    Endpoint AJAX con control estricto de cuota diaria.
-    """
+def enviar_mensaje_gestor_api_view(request):
     usuario = request.user
-
-    # 1. Validación estricta de Cuota Diaria
-    if usuario.mensajes_usados_hoy >= usuario.cuota_diaria_mensajes:
-        return JsonResponse({
-            'error': f'Ha alcanzado su límite diario de {usuario.cuota_diaria_mensajes} mensajes.'
-        }, status=429)
 
     try:
         data = json.loads(request.body)
@@ -87,26 +72,23 @@ def enviar_mensaje_api_view(request):
         if not pregunta:
             return JsonResponse({'error': 'El mensaje no puede estar vacío.'}, status=400)
 
-        # 2. Asignar o crear conversación
         if conversacion_id:
             conversacion = get_object_or_404(Conversacion, id=conversacion_id, usuario=usuario)
         else:
             titulo_auto = pregunta[:40] + ("..." if len(pregunta) > 40 else "")
             conversacion = Conversacion.objects.create(usuario=usuario, titulo=titulo_auto)
 
-        if conversacion.mensajes.count() == 0 and conversacion.titulo == "Consulta Normativa":
+        if conversacion.mensajes.count() == 0 and conversacion.titulo == "Consulta Normativa (Gestor)":
             conversacion.titulo = pregunta[:40] + ("..." if len(pregunta) > 40 else "")
             conversacion.save()
 
         with transaction.atomic():
-            # 3. Guardar pregunta del usuario
             msg_usuario = Mensaje.objects.create(
                 conversacion=conversacion,
                 emisor=Mensaje.Emisor.USUARIO,
                 contenido_texto=pregunta
             )
 
-            # 4. RAG y Generación
             contexto, citas = buscar_contexto_normativo(pregunta)
             respuesta_texto, proveedor_usado, conmutado = generar_respuesta_ia_con_fallback(
                 pregunta_usuario=pregunta,
@@ -114,7 +96,6 @@ def enviar_mensaje_api_view(request):
                 usuario=usuario
             )
 
-            # 5. Guardar respuesta del sistema
             msg_sistema = Mensaje.objects.create(
                 conversacion=conversacion,
                 emisor=Mensaje.Emisor.SISTEMA,
@@ -124,17 +105,11 @@ def enviar_mensaje_api_view(request):
                 citas=citas
             )
 
-            # 6. Incrementar consumo de cuota diaria
-            usuario.mensajes_usados_hoy += 1
-            usuario.save(update_fields=['mensajes_usados_hoy'])
-
-        mensajes_restantes = max(0, usuario.cuota_diaria_mensajes - usuario.mensajes_usados_hoy)
-
         return JsonResponse({
             'ok': True,
             'conversacion_id': str(conversacion.id),
             'conversacion_titulo': conversacion.titulo,
-            'mensajes_restantes': mensajes_restantes,
+            'mensajes_restantes': "Ilimitado",
             'pregunta': {
                 'id': msg_usuario.id,
                 'contenido': msg_usuario.contenido_texto,
@@ -152,19 +127,3 @@ def enviar_mensaje_api_view(request):
 
     except Exception as e:
         return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
-
-
-@login_required
-@roles_requeridos(Usuario.Rol.REGISTRADO)
-def perfil_usuario_view(request):
-    user = request.user
-    if request.method == 'POST':
-        form = EditarPerfilUsuarioForm(request.POST, instance=user, user=user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Tu perfil ha sido actualizado.")
-            return redirect('usuario_perfil')
-    else:
-        form = EditarPerfilUsuarioForm(instance=user, user=user)
-
-    return render(request, 'usuario/perfil.html', {'form': form})
